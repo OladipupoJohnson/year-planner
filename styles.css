@@ -589,12 +589,13 @@ body {
     top: 2px;
     left: 4px;
     font-size: 0.65rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    opacity: 0.25;
+    font-weight: 700;
+    color: #ffffff;
+    opacity: 0.4;
     pointer-events: none;
     user-select: none;
     text-transform: uppercase;
+    font-family: var(--font-display);
 }
 
 .day-cell:hover {
