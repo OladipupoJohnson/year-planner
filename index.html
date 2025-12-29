@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Year Planner 2025</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <span class="year-number" id="currentYear">2025</span>
+                    <span class="title-text">Year Planner</span>
+                </h1>
+                <div class="year-nav">
+                    <button class="nav-btn" id="prevYear" aria-label="Previous year">←</button>
+                    <button class="nav-btn" id="nextYear" aria-label="Next year">→</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-secondary" id="syncCalendars">
+                    <span class="btn-icon">↻</span>
+                    Sync Calendars
+                </button>
+                <button class="btn btn-primary" id="printBtn">
+                    <span class="btn-icon">⎙</span>
+                    Print
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <!-- Calendar Connections -->
+                <section class="sidebar-section">
+                    <h2 class="section-title">Calendars</h2>
+                    <div class="calendar-connections">
+                        <div class="calendar-item" id="googleCalStatus">
+                            <span class="calendar-icon google">G</span>
+                            <span class="calendar-name">Google Calendar</span>
+                            <button class="connect-btn" id="connectGoogle">Connect</button>
+                        </div>
+                        <div class="calendar-item" id="appleCalStatus">
+                            <span class="calendar-icon apple">⌘</span>
+                            <span class="calendar-name">Apple Calendar</span>
+                            <button class="connect-btn" id="connectApple">Connect</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Categories -->
+                <section class="sidebar-section">
+                    <h2 class="section-title">
+                        Categories
+                        <button class="add-btn" id="manageCategories" aria-label="Manage categories">⚙</button>
+                    </h2>
+                    <div class="categories-list" id="categoriesList">
+                        <!-- Categories will be rendered dynamically by JS -->
+                    </div>
+                </section>
+
+                <!-- Goals & Milestones -->
+                <section class="sidebar-section goals-section">
+                    <h2 class="section-title">
+                        Goals & Milestones
+                        <button class="add-btn" id="addGoal" aria-label="Add goal">+</button>
+                    </h2>
+                    <div class="goals-list" id="goalsList">
+                        <!-- Goals will be rendered here -->
+                    </div>
+                </section>
+
+                <!-- Quick Stats -->
+                <section class="sidebar-section">
+                    <h2 class="section-title">Quick Stats</h2>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-value" id="totalEvents">0</span>
+                            <span class="stat-label">Events</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="upcomingEvents">0</span>
+                            <span class="stat-label">Upcoming</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="goalsCompleted">0</span>
+                            <span class="stat-label">Goals Done</span>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Year Grid -->
+            <div class="grid-container">
+                <div class="year-grid" id="yearGrid">
+                    <!-- Grid Header (Days 1-31) -->
+                    <div class="grid-header">
+                        <div class="grid-cell header-corner"></div>
+                        <!-- Day headers will be generated by JS -->
+                    </div>
+                    <!-- Month rows will be generated by JS -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Event Modal -->
+        <div class="modal-overlay" id="eventModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="modalTitle">Add Event</h3>
+                    <button class="modal-close" id="closeModal">×</button>
+                </div>
+                <form class="modal-form" id="eventForm">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title</label>
+                        <input type="text" id="eventTitle" required placeholder="Enter event title...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="eventDate">Date</label>
+                            <input type="date" id="eventDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventEndDate">End Date (optional)</label>
+                            <input type="date" id="eventEndDate">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventCategory">Category</label>
+                        <select id="eventCategory" required>
+                            <!-- Categories populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventNotes">Notes</label>
+                        <textarea id="eventNotes" rows="3" placeholder="Add notes..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="syncToGoogle">
+                            Sync to Google Calendar
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="syncToApple">
+                            Sync to Apple Calendar
+                        </label>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelEvent">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="deleteEvent" style="display: none;">Delete</button>
+                        <button type="submit" class="btn btn-primary">Save Event</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Goal Modal -->
+        <div class="modal-overlay" id="goalModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">Add Goal</h3>
+                    <button class="modal-close" id="closeGoalModal">×</button>
+                </div>
+                <form class="modal-form" id="goalForm">
+                    <div class="form-group">
+                        <label for="goalTitle">Goal Title</label>
+                        <input type="text" id="goalTitle" required placeholder="What do you want to achieve?">
+                    </div>
+                    <div class="form-group">
+                        <label for="goalDeadline">Target Date</label>
+                        <input type="date" id="goalDeadline">
+                    </div>
+                    <div class="form-group">
+                        <label for="goalCategory">Category</label>
+                        <select id="goalCategory">
+                            <!-- Categories populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelGoal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Goal</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Category Management Modal -->
+        <div class="modal-overlay" id="categoryModal">
+            <div class="modal modal-wide">
+                <div class="modal-header">
+                    <h3 class="modal-title">Manage Categories</h3>
+                    <button class="modal-close" id="closeCategoryModal">×</button>
+                </div>
+                <div class="modal-form">
+                    <!-- Add New Category -->
+                    <div class="category-add-form">
+                        <h4 class="subsection-title">Add New Category</h4>
+                        <div class="category-add-row">
+                            <input type="text" id="newCategoryName" placeholder="Category name..." class="category-name-input">
+                            <input type="text" id="newCategoryEmoji" placeholder="🎯" class="category-emoji-input" maxlength="2">
+                            <input type="color" id="newCategoryColor" value="#00d9ff" class="category-color-input">
+                            <button type="button" class="btn btn-primary" id="addCategoryBtn">Add</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Existing Categories -->
+                    <div class="category-manage-section">
+                        <h4 class="subsection-title">Your Categories</h4>
+                        <div class="category-manage-list" id="categoryManageList">
+                            <!-- Categories will be rendered here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Preset Colors -->
+                    <div class="color-presets">
+                        <span class="preset-label">Quick colors:</span>
+                        <button type="button" class="color-preset" data-color="#00d9ff" style="background: #00d9ff;"></button>
+                        <button type="button" class="color-preset" data-color="#ff6b9d" style="background: #ff6b9d;"></button>
+                        <button type="button" class="color-preset" data-color="#7cff6b" style="background: #7cff6b;"></button>
+                        <button type="button" class="color-preset" data-color="#ffb347" style="background: #ffb347;"></button>
+                        <button type="button" class="color-preset" data-color="#a78bfa" style="background: #a78bfa;"></button>
+                        <button type="button" class="color-preset" data-color="#f472b6" style="background: #f472b6;"></button>
+                        <button type="button" class="color-preset" data-color="#34d399" style="background: #34d399;"></button>
+                        <button type="button" class="color-preset" data-color="#fbbf24" style="background: #fbbf24;"></button>
+                        <button type="button" class="color-preset" data-color="#60a5fa" style="background: #60a5fa;"></button>
+                        <button type="button" class="color-preset" data-color="#f87171" style="background: #f87171;"></button>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" id="closeCategoryModalBtn">Done</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <!-- Google API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <!-- App Scripts -->
+    <script src="config.js"></script>
+    <script src="calendar-google.js"></script>
+    <script src="calendar-apple.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
