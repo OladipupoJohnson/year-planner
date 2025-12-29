@@ -15,13 +15,15 @@ const DEFAULT_CATEGORIES = [
 // Application State
 const state = {
     currentYear: new Date().getFullYear(),
+    currentMonth: new Date().getMonth(), // For mobile month view
     events: [],
     goals: [],
     categories: [...DEFAULT_CATEGORIES],
     visibleCategories: new Set(['family-trips', 'weddings', 'refresh-days', 'music-launch', 'ball-days']),
     googleConnected: false,
     appleConnected: false,
-    editingEventId: null
+    editingEventId: null,
+    sidebarOpen: false
 };
 
 // Month names
@@ -133,6 +135,19 @@ function renderYearGrid() {
     
     // Render events on grid
     renderEventsOnGrid();
+    
+    // Also update mobile view if needed
+    if (isMobileView()) {
+        renderMobileMonthView();
+    }
+}
+
+// Helper function to update both desktop and mobile views
+function updateAllViews() {
+    renderEventsOnGrid();
+    if (isMobileView()) {
+        renderMobileMonthView();
+    }
 }
 
 function renderEventsOnGrid() {
@@ -368,7 +383,7 @@ function deleteEventFromDropdown(eventId) {
     if (confirm(`Delete "${event.title}"?`)) {
         state.events = state.events.filter(e => e.id !== eventId);
         saveToLocalStorage();
-        renderEventsOnGrid();
+        updateAllViews();
         closeEventDropdown();
         showToast('Event deleted', 'info');
     }
@@ -425,11 +440,13 @@ function openEventModal(year, month, day, eventId = null) {
     }
     
     modal.classList.add('active');
+    closeMobileSidebar(); // Close sidebar on mobile when opening modal
 }
 
 function closeEventModal() {
     document.getElementById('eventModal').classList.remove('active');
     state.editingEventId = null;
+    closeMobileSidebar(); // Close sidebar on mobile when modal closes
 }
 
 async function saveEvent(e) {
@@ -478,7 +495,7 @@ async function saveEvent(e) {
     }
     
     saveToLocalStorage();
-    renderEventsOnGrid();
+    updateAllViews();
     closeEventModal();
 }
 
@@ -488,7 +505,7 @@ function deleteEvent() {
     if (confirm('Are you sure you want to delete this event?')) {
         state.events = state.events.filter(e => e.id !== state.editingEventId);
         saveToLocalStorage();
-        renderEventsOnGrid();
+        updateAllViews();
         closeEventModal();
         showToast('Event deleted', 'info');
     }
@@ -545,10 +562,12 @@ function openGoalModal() {
     const modal = document.getElementById('goalModal');
     document.getElementById('goalForm').reset();
     modal.classList.add('active');
+    closeMobileSidebar(); // Close sidebar on mobile when opening modal
 }
 
 function closeGoalModal() {
     document.getElementById('goalModal').classList.remove('active');
+    closeMobileSidebar(); // Close sidebar on mobile when modal closes
 }
 
 function saveGoal(e) {
@@ -645,6 +664,7 @@ function injectCategoryStyles() {
         css += `
             .category-color.${cat.id} { background: ${cat.color}; }
             .event-dot.${cat.id} { background: ${cat.color}; }
+            .mobile-event-dot.${cat.id} { background: ${cat.color}; }
             .day-cell.${cat.id}-bg { background: ${bgColor}; }
             .event-dropdown-color.${cat.id} { background: ${cat.color}; }
         `;
@@ -665,10 +685,12 @@ function openCategoryModal() {
     const modal = document.getElementById('categoryModal');
     renderCategoryManageList();
     modal.classList.add('active');
+    closeMobileSidebar(); // Close sidebar on mobile when opening modal
 }
 
 function closeCategoryModal() {
     document.getElementById('categoryModal').classList.remove('active');
+    closeMobileSidebar(); // Close sidebar on mobile when modal closes
 }
 
 function renderCategoryManageList() {
@@ -743,7 +765,7 @@ function addCategory() {
     saveToLocalStorage();
     renderCategories();
     renderCategoryManageList();
-    renderEventsOnGrid();
+    updateAllViews();
     
     showToast(`Category "${name}" added!`, 'success');
 }
@@ -786,7 +808,7 @@ function setupCategoryFilters() {
             } else {
                 state.visibleCategories.delete(category);
             }
-            renderEventsOnGrid();
+            updateAllViews();
         });
     });
 }
@@ -864,7 +886,7 @@ async function syncCalendars() {
             mergeExternalEvents(appleEvents, 'apple');
         }
         
-        renderEventsOnGrid();
+        updateAllViews();
         showToast('Calendars synced successfully!', 'success');
     } catch (err) {
         console.error('Sync error:', err);
@@ -975,6 +997,248 @@ function showToast(message, type = 'info') {
 }
 
 /* ============================================
+   Mobile Month View
+   ============================================ */
+
+function renderMobileMonthView() {
+    const container = document.getElementById('mobileMonthGrid');
+    const eventsContainer = document.getElementById('mobileMonthEvents');
+    const titleEl = document.getElementById('mobileMonthTitle');
+    
+    if (!container) return; // Desktop view
+    
+    const year = state.currentYear;
+    const month = state.currentMonth;
+    const daysInMonth = getDaysInMonth(month, year);
+    
+    // Update title
+    titleEl.textContent = `${MONTHS[month]} ${year}`;
+    
+    // Clear containers
+    container.innerHTML = '';
+    eventsContainer.innerHTML = '';
+    
+    // Day headers (Sun, Mon, Tue, etc.)
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    dayNames.forEach(dayName => {
+        const header = document.createElement('div');
+        header.className = 'mobile-day-header';
+        header.textContent = dayName;
+        container.appendChild(header);
+    });
+    
+    // Get first day of month (0 = Sunday, 1 = Monday, etc.)
+    const firstDay = new Date(year, month, 1).getDay();
+    
+    // Add empty cells for days before month starts
+    for (let i = 0; i < firstDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'mobile-day-cell unavailable';
+        container.appendChild(emptyCell);
+    }
+    
+    // Add day cells
+    const today = new Date();
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayCell = document.createElement('div');
+        dayCell.className = 'mobile-day-cell';
+        
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        dayCell.dataset.date = dateStr;
+        
+        // Check if today
+        if (today.getFullYear() === year && 
+            today.getMonth() === month && 
+            today.getDate() === day) {
+            dayCell.classList.add('today');
+        }
+        
+        // Day number
+        const dayNumber = document.createElement('div');
+        dayNumber.className = 'mobile-day-number';
+        dayNumber.textContent = day;
+        dayCell.appendChild(dayNumber);
+        
+        // Events for this day
+        const dayEvents = getEventsForDate(dateStr);
+        if (dayEvents.length > 0) {
+            const eventsContainer = document.createElement('div');
+            eventsContainer.className = 'mobile-day-events';
+            dayEvents.slice(0, 3).forEach(event => {
+                const dot = document.createElement('div');
+                dot.className = `mobile-event-dot ${event.category}`;
+                // Color will be applied via CSS from injectCategoryStyles
+                eventsContainer.appendChild(dot);
+            });
+            dayCell.appendChild(eventsContainer);
+        }
+        
+        // Click handler
+        dayCell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const date = new Date(year, month, day);
+            handleDayCellClick(year, month, day, dayCell);
+        });
+        
+        container.appendChild(dayCell);
+    }
+    
+    // Render events list
+    renderMobileMonthEvents(month, year);
+}
+
+function renderMobileMonthEvents(month, year) {
+    const container = document.getElementById('mobileMonthEvents');
+    if (!container) return;
+    
+    // Get all events for this month
+    const monthEvents = state.events.filter(event => {
+        if (!state.visibleCategories.has(event.category)) return false;
+        
+        const eventDate = new Date(event.startDate);
+        return eventDate.getFullYear() === year && eventDate.getMonth() === month;
+    });
+    
+    // Sort by date
+    monthEvents.sort((a, b) => {
+        const dateA = new Date(a.startDate);
+        const dateB = new Date(b.startDate);
+        return dateA - dateB;
+    });
+    
+    if (monthEvents.length === 0) {
+        container.innerHTML = '<div class="mobile-empty-state">No events this month</div>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    monthEvents.forEach(event => {
+        const eventEl = document.createElement('div');
+        eventEl.className = 'mobile-event-item';
+        
+        const category = state.categories.find(c => c.id === event.category);
+        const categoryColor = category ? category.color : '#00d9ff';
+        
+        const startDate = new Date(event.startDate);
+        const dateStr = startDate.toLocaleDateString('en-US', { 
+            weekday: 'short', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+        
+        eventEl.innerHTML = `
+            <div class="mobile-event-header">
+                <div class="mobile-event-color" style="background: ${categoryColor};"></div>
+                <div class="mobile-event-title">${event.title}</div>
+                <div class="mobile-event-date">${dateStr}</div>
+            </div>
+            ${event.notes ? `<div class="mobile-event-notes">${event.notes}</div>` : ''}
+        `;
+        
+        eventEl.addEventListener('click', () => {
+            const date = new Date(event.startDate);
+            editEventFromDropdown(event.id);
+        });
+        
+        container.appendChild(eventEl);
+    });
+}
+
+function navigateMobileMonth(direction) {
+    if (direction === 'next') {
+        if (state.currentMonth === 11) {
+            state.currentMonth = 0;
+            state.currentYear++;
+        } else {
+            state.currentMonth++;
+        }
+    } else {
+        if (state.currentMonth === 0) {
+            state.currentMonth = 11;
+            state.currentYear--;
+        } else {
+            state.currentMonth--;
+        }
+    }
+    
+    document.getElementById('currentYear').textContent = state.currentYear;
+    renderMobileMonthView();
+    if (!isMobileView()) {
+        renderYearGrid(); // Update desktop view too
+    }
+}
+
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    state.sidebarOpen = !state.sidebarOpen;
+    
+    if (state.sidebarOpen) {
+        sidebar.classList.add('active');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    } else {
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+function closeMobileSidebar() {
+    if (state.sidebarOpen) {
+        toggleMobileSidebar();
+    }
+}
+
+// Swipe gesture support for mobile
+function initSwipeGestures() {
+    const container = document.querySelector('.mobile-month-container');
+    if (!container) return;
+    
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    container.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+    
+    container.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, { passive: true });
+    
+    function handleSwipe() {
+        const swipeThreshold = 50;
+        const diff = touchStartX - touchEndX;
+        
+        if (Math.abs(diff) > swipeThreshold) {
+            if (diff > 0) {
+                // Swipe left - next month
+                navigateMobileMonth('next');
+            } else {
+                // Swipe right - previous month
+                navigateMobileMonth('prev');
+            }
+        }
+    }
+}
+
+// Check if mobile view should be shown
+function isMobileView() {
+    return window.innerWidth <= 900;
+}
+
+// Handle window resize
+function handleResize() {
+    if (isMobileView()) {
+        renderMobileMonthView();
+    } else {
+        renderYearGrid();
+    }
+}
+
+/* ============================================
    Event Listeners Setup
    ============================================ */
 
@@ -983,12 +1247,40 @@ function setupEventListeners() {
     document.getElementById('prevYear').addEventListener('click', () => {
         state.currentYear--;
         renderYearGrid();
+        if (isMobileView()) {
+            renderMobileMonthView();
+        }
     });
     
     document.getElementById('nextYear').addEventListener('click', () => {
         state.currentYear++;
         renderYearGrid();
+        if (isMobileView()) {
+            renderMobileMonthView();
+        }
     });
+    
+    // Mobile month navigation
+    const prevMonthBtn = document.getElementById('prevMonth');
+    const nextMonthBtn = document.getElementById('nextMonth');
+    if (prevMonthBtn) {
+        prevMonthBtn.addEventListener('click', () => navigateMobileMonth('prev'));
+    }
+    if (nextMonthBtn) {
+        nextMonthBtn.addEventListener('click', () => navigateMobileMonth('next'));
+    }
+    
+    // Mobile menu toggle
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+    }
+    
+    // Sidebar overlay close
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeMobileSidebar);
+    }
     
     // Print
     document.getElementById('printBtn').addEventListener('click', printYearPlanner);
@@ -1068,8 +1360,19 @@ function setupEventListeners() {
             closeEventModal();
             closeGoalModal();
             closeCategoryModal();
+            closeMobileSidebar();
         }
     });
+    
+    // Window resize handler
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(handleResize, 250);
+    });
+    
+    // Initialize swipe gestures
+    initSwipeGestures();
 }
 
 /* ============================================
@@ -1079,7 +1382,14 @@ function setupEventListeners() {
 function init() {
     loadFromLocalStorage();
     renderCategories();  // Render categories first (creates dynamic styles)
-    renderYearGrid();
+    
+    // Render appropriate view based on screen size
+    if (isMobileView()) {
+        renderMobileMonthView();
+    } else {
+        renderYearGrid();
+    }
+    
     renderGoals();
     setupEventListeners();
     updateStats();
@@ -1164,7 +1474,7 @@ function addSampleData() {
     ];
     
     saveToLocalStorage();
-    renderEventsOnGrid();
+    updateAllViews();
     renderGoals();
 }
 
