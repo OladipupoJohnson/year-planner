@@ -14,7 +14,7 @@ const DEFAULT_CATEGORIES = [
 
 // Application State
 const state = {
-    currentYear: new Date().getFullYear(),
+    currentYear: 2026, // Default to 2026
     currentMonth: new Date().getMonth(), // For mobile month view
     events: [],
     goals: [],
@@ -25,6 +25,125 @@ const state = {
     editingEventId: null,
     sidebarOpen: false
 };
+
+// Performance: Cache DOM references
+const domCache = {
+    mobileMonthGrid: null,
+    mobileMonthEvents: null,
+    mobileMonthTitle: null,
+    yearGrid: null,
+    currentYearEl: null,
+    sidebar: null,
+    sidebarOverlay: null
+};
+
+// Performance: Pre-computed event maps for fast lookups
+let eventsByDateCache = null;
+let eventsByMonthCache = null;
+let cacheInvalidated = true;
+
+// Performance: Debounce/throttle utilities
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function throttle(func, limit) {
+    let inThrottle;
+    return function(...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
+// Initialize DOM cache
+function initDOMCache() {
+    domCache.mobileMonthGrid = document.getElementById('mobileMonthGrid');
+    domCache.mobileMonthEvents = document.getElementById('mobileMonthEvents');
+    domCache.mobileMonthTitle = document.getElementById('mobileMonthTitle');
+    domCache.yearGrid = document.getElementById('yearGrid');
+    domCache.currentYearEl = document.getElementById('currentYear');
+    domCache.sidebar = document.getElementById('sidebar');
+    domCache.sidebarOverlay = document.getElementById('sidebarOverlay');
+}
+
+// Invalidate event cache when events change
+function invalidateEventCache() {
+    cacheInvalidated = true;
+    eventsByDateCache = null;
+    eventsByMonthCache = null;
+}
+
+// Pre-compute events by date for fast lookups
+function buildEventsByDateCache() {
+    if (!cacheInvalidated && eventsByDateCache) return eventsByDateCache;
+    
+    eventsByDateCache = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    state.events.forEach(event => {
+        if (!state.visibleCategories.has(event.category)) return;
+        
+        const startDate = new Date(event.startDate);
+        const endDate = event.endDate ? new Date(event.endDate) : startDate;
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(0, 0, 0, 0);
+        
+        const current = new Date(startDate);
+        while (current <= endDate) {
+            const dateKey = current.toISOString().split('T')[0];
+            if (!eventsByDateCache[dateKey]) {
+                eventsByDateCache[dateKey] = [];
+            }
+            eventsByDateCache[dateKey].push(event);
+            current.setDate(current.getDate() + 1);
+        }
+    });
+    
+    cacheInvalidated = false;
+    return eventsByDateCache;
+}
+
+// Pre-compute events by month for mobile view
+function buildEventsByMonthCache() {
+    if (!cacheInvalidated && eventsByMonthCache) return eventsByMonthCache;
+    
+    eventsByMonthCache = {};
+    
+    state.events.forEach(event => {
+        if (!state.visibleCategories.has(event.category)) return;
+        
+        const eventDate = new Date(event.startDate);
+        const year = eventDate.getFullYear();
+        const month = eventDate.getMonth();
+        const key = `${year}-${month}`;
+        
+        if (!eventsByMonthCache[key]) {
+            eventsByMonthCache[key] = [];
+        }
+        eventsByMonthCache[key].push(event);
+    });
+    
+    // Sort each month's events
+    Object.keys(eventsByMonthCache).forEach(key => {
+        eventsByMonthCache[key].sort((a, b) => {
+            return new Date(a.startDate) - new Date(b.startDate);
+        });
+    });
+    
+    return eventsByMonthCache;
+}
 
 // Month names
 const MONTHS = [
@@ -120,11 +239,7 @@ function renderYearGrid() {
                     dayCell.classList.add('today');
                 }
                 
-                // Add click handler for valid days - shows dropdown menu
-                dayCell.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    handleDayCellClick(year, monthIndex, day, dayCell);
-                });
+                // Click handler removed - now using event delegation in setupEventDelegation()
             }
             
             monthRow.appendChild(dayCell);
@@ -142,124 +257,107 @@ function renderYearGrid() {
     }
 }
 
-// Helper function to update both desktop and mobile views
+// Optimized: Only update visible view
 function updateAllViews() {
-    renderEventsOnGrid();
     if (isMobileView()) {
+        invalidateEventCache();
         renderMobileMonthView();
+    } else {
+        renderEventsOnGrid();
     }
 }
 
+// Optimized: Use cached event map and batch DOM updates
 function renderEventsOnGrid() {
-    // Clear existing event indicators
-    document.querySelectorAll('.day-cell').forEach(cell => {
-        cell.classList.remove('has-event', 'event-start', 'event-middle', 'event-end');
-        cell.classList.remove('family-trips-bg', 'weddings-bg', 'refresh-days-bg', 'music-launch-bg', 'ball-days-bg');
-        cell.removeAttribute('data-tooltip');
-        
-        // Remove event dots
-        const dots = cell.querySelectorAll('.event-dot, .multi-event');
-        dots.forEach(dot => dot.remove());
-    });
+    if (isMobileView()) return; // Skip if mobile view is active
     
-    // Group events by date
-    const eventsByDate = {};
+    // Build cache if needed
+    buildEventsByDateCache();
     
-    state.events.forEach(event => {
-        if (!state.visibleCategories.has(event.category)) return;
-        
-        const startDate = new Date(event.startDate);
-        const endDate = event.endDate ? new Date(event.endDate) : startDate;
-        
-        // Only process events in current year
-        if (startDate.getFullYear() !== state.currentYear && 
-            endDate.getFullYear() !== state.currentYear) return;
-        
-        // Iterate through each day of the event
-        const current = new Date(startDate);
-        while (current <= endDate) {
-            if (current.getFullYear() === state.currentYear) {
-                const dateKey = current.toISOString().split('T')[0];
-                if (!eventsByDate[dateKey]) {
-                    eventsByDate[dateKey] = [];
-                }
-                eventsByDate[dateKey].push({
-                    ...event,
-                    isStart: current.getTime() === startDate.getTime(),
-                    isEnd: current.getTime() === endDate.getTime()
-                });
-            }
-            current.setDate(current.getDate() + 1);
-        }
-    });
-    
-    // Render events on cells
-    Object.entries(eventsByDate).forEach(([dateKey, events]) => {
-        const cell = document.querySelector(`.day-cell[data-date="${dateKey}"]`);
-        if (!cell || cell.classList.contains('unavailable')) return;
-        
-        cell.classList.add('has-event');
-        
-        // Set tooltip
-        const tooltipText = events.map(e => e.title).join(', ');
-        cell.setAttribute('data-tooltip', tooltipText);
-        
-        // Add background color for first event (or range)
-        const primaryEvent = events[0];
-        cell.classList.add(`${primaryEvent.category}-bg`);
-        
-        // Position indicators for ranges
-        if (events.some(e => e.isStart && !e.isEnd)) {
-            cell.classList.add('event-start');
-        }
-        if (events.some(e => e.isEnd && !e.isStart)) {
-            cell.classList.add('event-end');
-        }
-        if (events.some(e => !e.isStart && !e.isEnd)) {
-            cell.classList.add('event-middle');
-        }
-        
-        // Add event dot(s)
-        if (events.length === 1) {
-            const dot = document.createElement('div');
-            dot.className = `event-dot ${events[0].category}`;
-            cell.appendChild(dot);
-        } else {
-            // Multiple events
-            const multiContainer = document.createElement('div');
-            multiContainer.className = 'multi-event';
-            events.slice(0, 3).forEach(event => {
-                const dot = document.createElement('div');
-                dot.className = `event-dot ${event.category}`;
-                multiContainer.appendChild(dot);
+    // Batch DOM updates using requestAnimationFrame
+    requestAnimationFrame(() => {
+        // Clear existing event indicators (only for desktop view)
+        const dayCells = document.querySelectorAll('.day-cell');
+        dayCells.forEach(cell => {
+            cell.classList.remove('has-event', 'event-start', 'event-middle', 'event-end');
+            // Remove all category background classes dynamically
+            state.categories.forEach(cat => {
+                cell.classList.remove(`${cat.id}-bg`);
             });
-            cell.appendChild(multiContainer);
-        }
-    });
+            cell.removeAttribute('data-tooltip');
+            
+            // Remove event dots
+            const dots = cell.querySelectorAll('.event-dot, .multi-event');
+            dots.forEach(dot => dot.remove());
+        });
     
-    // Update stats
-    updateStats();
+        // Use pre-computed cache instead of rebuilding
+        const eventsByDate = eventsByDateCache;
+        
+        // Render events on cells (only for current year)
+        Object.entries(eventsByDate).forEach(([dateKey, events]) => {
+            // Filter to current year only
+            if (!dateKey.startsWith(state.currentYear.toString())) return;
+            
+            const cell = document.querySelector(`.day-cell[data-date="${dateKey}"]`);
+            if (!cell || cell.classList.contains('unavailable')) return;
+            
+            cell.classList.add('has-event');
+            
+            // Set tooltip
+            const tooltipText = events.map(e => e.title).join(', ');
+            cell.setAttribute('data-tooltip', tooltipText);
+            
+            // Add background color for first event (or range)
+            const primaryEvent = events[0];
+            cell.classList.add(`${primaryEvent.category}-bg`);
+            
+            // Position indicators for ranges
+            const startDate = new Date(events[0].startDate);
+            const endDate = events[0].endDate ? new Date(events[0].endDate) : startDate;
+            const checkDate = new Date(dateKey);
+            
+            if (checkDate.getTime() === startDate.getTime() && checkDate.getTime() !== endDate.getTime()) {
+                cell.classList.add('event-start');
+            }
+            if (checkDate.getTime() === endDate.getTime() && checkDate.getTime() !== startDate.getTime()) {
+                cell.classList.add('event-end');
+            }
+            if (checkDate.getTime() > startDate.getTime() && checkDate.getTime() < endDate.getTime()) {
+                cell.classList.add('event-middle');
+            }
+            
+            // Add event dot(s)
+            if (events.length === 1) {
+                const dot = document.createElement('div');
+                dot.className = `event-dot ${events[0].category}`;
+                cell.appendChild(dot);
+            } else {
+                // Multiple events
+                const multiContainer = document.createElement('div');
+                multiContainer.className = 'multi-event';
+                events.slice(0, 3).forEach(event => {
+                    const dot = document.createElement('div');
+                    dot.className = `event-dot ${event.category}`;
+                    multiContainer.appendChild(dot);
+                });
+                cell.appendChild(multiContainer);
+            }
+        });
+        
+        // Update stats
+        updateStats();
+    });
 }
 
 /* ============================================
    Event Dropdown Menu
    ============================================ */
 
+// Optimized: Use cached event map for fast lookups
 function getEventsForDate(dateStr) {
-    return state.events.filter(event => {
-        if (!state.visibleCategories.has(event.category)) return false;
-        
-        const startDate = new Date(event.startDate);
-        const endDate = event.endDate ? new Date(event.endDate) : startDate;
-        const checkDate = new Date(dateStr);
-        
-        // Set all dates to midnight for comparison
-        startDate.setHours(0, 0, 0, 0);
-        endDate.setHours(0, 0, 0, 0);
-        checkDate.setHours(0, 0, 0, 0);
-        
-        return checkDate >= startDate && checkDate <= endDate;
-    });
+    buildEventsByDateCache();
+    return eventsByDateCache[dateStr] || [];
 }
 
 function showEventDropdown(year, month, day, cellElement) {
@@ -382,6 +480,7 @@ function deleteEventFromDropdown(eventId) {
     
     if (confirm(`Delete "${event.title}"?`)) {
         state.events = state.events.filter(e => e.id !== eventId);
+        invalidateEventCache();
         saveToLocalStorage();
         updateAllViews();
         closeEventDropdown();
@@ -474,6 +573,7 @@ async function saveEvent(e) {
     } else {
         // Add new
         state.events.push(eventData);
+        invalidateEventCache();
         showToast('Event created successfully', 'success');
     }
     
@@ -504,6 +604,7 @@ function deleteEvent() {
     
     if (confirm('Are you sure you want to delete this event?')) {
         state.events = state.events.filter(e => e.id !== state.editingEventId);
+        invalidateEventCache();
         saveToLocalStorage();
         updateAllViews();
         closeEventModal();
@@ -853,6 +954,7 @@ function loadFromLocalStorage() {
     
     if (events) {
         state.events = JSON.parse(events);
+        invalidateEventCache();
     }
     if (goals) {
         state.goals = JSON.parse(goals);
@@ -895,6 +997,7 @@ async function syncCalendars() {
 }
 
 function mergeExternalEvents(externalEvents, source) {
+    let hasChanges = false;
     externalEvents.forEach(extEvent => {
         // Check if event already exists (by external ID)
         const existingIndex = state.events.findIndex(e => e.externalId === extEvent.id && e.source === source);
@@ -913,19 +1016,32 @@ function mergeExternalEvents(externalEvents, source) {
                 syncGoogle: source === 'google',
                 syncApple: source === 'apple'
             });
+            hasChanges = true;
         } else {
             // Update existing
-            state.events[existingIndex] = {
-                ...state.events[existingIndex],
+            const oldEvent = state.events[existingIndex];
+            const newEvent = {
+                ...oldEvent,
                 title: extEvent.title,
                 startDate: extEvent.startDate,
                 endDate: extEvent.endDate,
                 notes: extEvent.description || ''
             };
+            // Check if anything actually changed
+            if (oldEvent.title !== newEvent.title || 
+                oldEvent.startDate !== newEvent.startDate ||
+                oldEvent.endDate !== newEvent.endDate ||
+                oldEvent.notes !== newEvent.notes) {
+                state.events[existingIndex] = newEvent;
+                hasChanges = true;
+            }
         }
     });
     
-    saveToLocalStorage();
+    if (hasChanges) {
+        invalidateEventCache();
+        saveToLocalStorage();
+    }
 }
 
 function categorizeExternalEvent(title) {
@@ -1000,10 +1116,11 @@ function showToast(message, type = 'info') {
    Mobile Month View
    ============================================ */
 
+// Optimized: Use DocumentFragment and event delegation
 function renderMobileMonthView() {
-    const container = document.getElementById('mobileMonthGrid');
-    const eventsContainer = document.getElementById('mobileMonthEvents');
-    const titleEl = document.getElementById('mobileMonthTitle');
+    const container = domCache.mobileMonthGrid;
+    const eventsContainer = domCache.mobileMonthEvents;
+    const titleEl = domCache.mobileMonthTitle;
     
     if (!container) return; // Desktop view
     
@@ -1014,9 +1131,8 @@ function renderMobileMonthView() {
     // Update title
     titleEl.textContent = `${MONTHS[month]} ${year}`;
     
-    // Clear containers
-    container.innerHTML = '';
-    eventsContainer.innerHTML = '';
+    // Use DocumentFragment for batch DOM operations
+    const fragment = document.createDocumentFragment();
     
     // Day headers (Sun, Mon, Tue, etc.)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1024,7 +1140,7 @@ function renderMobileMonthView() {
         const header = document.createElement('div');
         header.className = 'mobile-day-header';
         header.textContent = dayName;
-        container.appendChild(header);
+        fragment.appendChild(header);
     });
     
     // Get first day of month (0 = Sunday, 1 = Monday, etc.)
@@ -1034,17 +1150,22 @@ function renderMobileMonthView() {
     for (let i = 0; i < firstDay; i++) {
         const emptyCell = document.createElement('div');
         emptyCell.className = 'mobile-day-cell unavailable';
-        container.appendChild(emptyCell);
+        fragment.appendChild(emptyCell);
     }
     
-    // Add day cells
+    // Pre-build event cache for this month
+    buildEventsByDateCache();
     const today = new Date();
+    
+    // Add day cells using DocumentFragment
     for (let day = 1; day <= daysInMonth; day++) {
         const dayCell = document.createElement('div');
         dayCell.className = 'mobile-day-cell';
         
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         dayCell.dataset.date = dateStr;
+        dayCell.dataset.month = month;
+        dayCell.dataset.day = day;
         
         // Check if today
         if (today.getFullYear() === year && 
@@ -1059,62 +1180,52 @@ function renderMobileMonthView() {
         dayNumber.textContent = day;
         dayCell.appendChild(dayNumber);
         
-        // Events for this day
-        const dayEvents = getEventsForDate(dateStr);
+        // Events for this day (use cached lookup)
+        const dayEvents = eventsByDateCache[dateStr] || [];
         if (dayEvents.length > 0) {
             const eventsContainer = document.createElement('div');
             eventsContainer.className = 'mobile-day-events';
             dayEvents.slice(0, 3).forEach(event => {
                 const dot = document.createElement('div');
                 dot.className = `mobile-event-dot ${event.category}`;
-                // Color will be applied via CSS from injectCategoryStyles
                 eventsContainer.appendChild(dot);
             });
             dayCell.appendChild(eventsContainer);
         }
         
-        // Click handler
-        dayCell.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const date = new Date(year, month, day);
-            handleDayCellClick(year, month, day, dayCell);
-        });
-        
-        container.appendChild(dayCell);
+        fragment.appendChild(dayCell);
     }
+    
+    // Single DOM update instead of multiple appends
+    container.innerHTML = '';
+    container.appendChild(fragment);
     
     // Render events list
     renderMobileMonthEvents(month, year);
 }
 
+// Optimized: Use cached month events and DocumentFragment
 function renderMobileMonthEvents(month, year) {
-    const container = document.getElementById('mobileMonthEvents');
+    const container = domCache.mobileMonthEvents;
     if (!container) return;
     
-    // Get all events for this month
-    const monthEvents = state.events.filter(event => {
-        if (!state.visibleCategories.has(event.category)) return false;
-        
-        const eventDate = new Date(event.startDate);
-        return eventDate.getFullYear() === year && eventDate.getMonth() === month;
-    });
-    
-    // Sort by date
-    monthEvents.sort((a, b) => {
-        const dateA = new Date(a.startDate);
-        const dateB = new Date(b.startDate);
-        return dateA - dateB;
-    });
+    // Use cached month events
+    buildEventsByMonthCache();
+    const monthKey = `${year}-${month}`;
+    const monthEvents = eventsByMonthCache[monthKey] || [];
     
     if (monthEvents.length === 0) {
         container.innerHTML = '<div class="mobile-empty-state">No events this month</div>';
         return;
     }
     
-    container.innerHTML = '';
+    // Use DocumentFragment for batch DOM operations
+    const fragment = document.createDocumentFragment();
+    
     monthEvents.forEach(event => {
         const eventEl = document.createElement('div');
         eventEl.className = 'mobile-event-item';
+        eventEl.dataset.eventId = event.id;
         
         const category = state.categories.find(c => c.id === event.category);
         const categoryColor = category ? category.color : '#00d9ff';
@@ -1135,13 +1246,14 @@ function renderMobileMonthEvents(month, year) {
             ${event.notes ? `<div class="mobile-event-notes">${event.notes}</div>` : ''}
         `;
         
-        eventEl.addEventListener('click', () => {
-            const date = new Date(event.startDate);
-            editEventFromDropdown(event.id);
-        });
+        // Click handler removed - now using event delegation in setupEventDelegation()
         
-        container.appendChild(eventEl);
+        fragment.appendChild(eventEl);
     });
+    
+    // Single DOM update
+    container.innerHTML = '';
+    container.appendChild(fragment);
 }
 
 function navigateMobileMonth(direction) {
@@ -1364,7 +1476,7 @@ function setupEventListeners() {
         }
     });
     
-    // Window resize handler
+    // Window resize handler (already debounced)
     let resizeTimeout;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
@@ -1376,10 +1488,64 @@ function setupEventListeners() {
 }
 
 /* ============================================
+   Event Delegation for Performance
+   ============================================ */
+
+// Use event delegation instead of individual listeners for better performance
+function setupEventDelegation() {
+    // Desktop year grid - delegate clicks to day cells
+    const yearGrid = domCache.yearGrid;
+    if (yearGrid) {
+        yearGrid.addEventListener('click', (e) => {
+            const dayCell = e.target.closest('.day-cell:not(.unavailable)');
+            if (dayCell) {
+                e.stopPropagation();
+                const year = state.currentYear;
+                const month = parseInt(dayCell.dataset.month);
+                const day = parseInt(dayCell.dataset.day);
+                handleDayCellClick(year, month, day, dayCell);
+            }
+        });
+    }
+    
+    // Mobile month grid - delegate clicks to day cells
+    const mobileMonthGrid = domCache.mobileMonthGrid;
+    if (mobileMonthGrid) {
+        mobileMonthGrid.addEventListener('click', (e) => {
+            const dayCell = e.target.closest('.mobile-day-cell:not(.unavailable)');
+            if (dayCell) {
+                e.stopPropagation();
+                const year = state.currentYear;
+                const month = parseInt(dayCell.dataset.month);
+                const day = parseInt(dayCell.dataset.day);
+                handleDayCellClick(year, month, day, dayCell);
+            }
+        });
+    }
+    
+    // Mobile events list - delegate clicks to event items
+    const mobileMonthEvents = domCache.mobileMonthEvents;
+    if (mobileMonthEvents) {
+        mobileMonthEvents.addEventListener('click', (e) => {
+            const eventItem = e.target.closest('.mobile-event-item');
+            if (eventItem) {
+                const eventId = eventItem.dataset.eventId;
+                if (eventId) {
+                    editEventFromDropdown(eventId);
+                }
+            }
+        });
+    }
+}
+
+/* ============================================
    Initialize App
    ============================================ */
 
 function init() {
+    // Initialize DOM cache first
+    initDOMCache();
+    
     loadFromLocalStorage();
     renderCategories();  // Render categories first (creates dynamic styles)
     
@@ -1392,6 +1558,7 @@ function init() {
     
     renderGoals();
     setupEventListeners();
+    setupEventDelegation(); // Add event delegation for performance
     updateStats();
     
     // Add some sample events for demo if empty

@@ -45,7 +45,7 @@ const CONFIG = {
     app: {
         name: 'Year Planner',
         version: '1.0.0',
-        defaultYear: new Date().getFullYear(),
+        defaultYear: 2026,
         autoSyncInterval: 5 * 60 * 1000 // 5 minutes in milliseconds
     }
 };

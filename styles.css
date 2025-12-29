@@ -579,7 +579,9 @@ body {
 .day-cell {
     position: relative;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    will-change: background-color;
+    contain: layout style paint;
 }
 
 .day-cell:hover {
@@ -1481,6 +1483,8 @@ body {
     padding: 16px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    contain: layout style;
+    transform: translateZ(0); /* Force GPU acceleration */
 }
 
 .mobile-month-header {
@@ -1534,6 +1538,8 @@ body {
     padding: 12px;
     border: 1px solid var(--border-color);
     margin-bottom: 16px;
+    contain: layout style;
+    transform: translateZ(0); /* Force GPU acceleration */
 }
 
 .mobile-day-header {
@@ -1556,7 +1562,9 @@ body {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+    will-change: transform;
+    contain: layout style paint;
     position: relative;
     min-height: 44px;
     -webkit-tap-highlight-color: transparent;
@@ -1608,6 +1616,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    contain: layout style;
 }
 
 .mobile-event-item {
@@ -1616,7 +1625,9 @@ body {
     border-radius: var(--radius-md);
     padding: 12px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    will-change: transform;
+    contain: layout style paint;
 }
 
 .mobile-event-item:active {
