@@ -584,6 +584,19 @@ body {
     contain: layout style paint;
 }
 
+.day-letter {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    opacity: 0.25;
+    pointer-events: none;
+    user-select: none;
+    text-transform: uppercase;
+}
+
 .day-cell:hover {
     background: var(--bg-hover);
     z-index: 5;

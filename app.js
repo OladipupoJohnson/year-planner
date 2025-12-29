@@ -239,6 +239,17 @@ function renderYearGrid() {
                     dayCell.classList.add('today');
                 }
                 
+                // Add day of week letter
+                const cellDate = new Date(year, monthIndex, day);
+                const dayOfWeek = cellDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                const dayLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+                const dayLetter = dayLetters[dayOfWeek].toUpperCase();
+                
+                const dayLetterEl = document.createElement('div');
+                dayLetterEl.className = 'day-letter';
+                dayLetterEl.textContent = dayLetter;
+                dayCell.appendChild(dayLetterEl);
+                
                 // Click handler removed - now using event delegation in setupEventDelegation()
             }
             
