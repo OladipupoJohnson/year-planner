@@ -23,6 +23,7 @@
     --refresh-days: #7cff6b;      /* Green - Wellness */
     --music-launch: #ffb347;      /* Orange - Energy */
     --ball-days: #a78bfa;         /* Purple - Sports */
+    --doctor-visits: #ff6b6b;     /* Red - Health */
     
     /* Category Colors - Muted for backgrounds */
     --family-trips-bg: rgba(0, 217, 255, 0.15);
@@ -30,6 +31,7 @@
     --refresh-days-bg: rgba(124, 255, 107, 0.15);
     --music-launch-bg: rgba(255, 179, 71, 0.15);
     --ball-days-bg: rgba(167, 139, 250, 0.15);
+    --doctor-visits-bg: rgba(255, 107, 107, 0.15);
     
     /* Accent */
     --accent-primary: #00d9ff;
@@ -382,6 +384,7 @@ body {
 .category-color.refresh-days { background: var(--refresh-days); }
 .category-color.music-launch { background: var(--music-launch); }
 .category-color.ball-days { background: var(--ball-days); }
+.category-color.doctor-visits { background: var(--doctor-visits); }
 
 .category-name {
     font-size: 0.85rem;
@@ -650,6 +653,7 @@ body {
 .event-dot.refresh-days { background: var(--refresh-days); }
 .event-dot.music-launch { background: var(--music-launch); }
 .event-dot.ball-days { background: var(--ball-days); }
+.event-dot.doctor-visits { background: var(--doctor-visits); }
 
 /* Multiple events indicator */
 .multi-event {
@@ -686,6 +690,7 @@ body {
 .day-cell.refresh-days-bg { background: var(--refresh-days-bg); }
 .day-cell.music-launch-bg { background: var(--music-launch-bg); }
 .day-cell.ball-days-bg { background: var(--ball-days-bg); }
+.day-cell.doctor-visits-bg { background: var(--doctor-visits-bg); }
 
 /* Day cell tooltip */
 .day-cell[data-tooltip]:hover::before {
@@ -803,6 +808,7 @@ body {
 .event-dropdown-color.refresh-days { background: var(--refresh-days); }
 .event-dropdown-color.music-launch { background: var(--music-launch); }
 .event-dropdown-color.ball-days { background: var(--ball-days); }
+.event-dropdown-color.doctor-visits { background: var(--doctor-visits); }
 
 .event-dropdown-info {
     flex: 1;

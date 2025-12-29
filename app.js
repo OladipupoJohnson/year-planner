@@ -9,7 +9,8 @@ const DEFAULT_CATEGORIES = [
     { id: 'weddings', name: 'Weddings', emoji: '💒', color: '#ff6b9d' },
     { id: 'refresh-days', name: 'Refresh Days', emoji: '🧘', color: '#7cff6b' },
     { id: 'music-launch', name: 'Music Launch Days', emoji: '🎵', color: '#ffb347' },
-    { id: 'ball-days', name: 'Ball Days', emoji: '⚽', color: '#a78bfa' }
+    { id: 'ball-days', name: 'Ball Days', emoji: '⚽', color: '#a78bfa' },
+    { id: 'doctor-visits', name: 'Doctor Visits', emoji: '🏥', color: '#ff6b6b' }
 ];
 
 // Application State
@@ -19,7 +20,7 @@ const state = {
     events: [],
     goals: [],
     categories: [...DEFAULT_CATEGORIES],
-    visibleCategories: new Set(['family-trips', 'weddings', 'refresh-days', 'music-launch', 'ball-days']),
+    visibleCategories: new Set(['family-trips', 'weddings', 'refresh-days', 'music-launch', 'ball-days', 'doctor-visits']),
     googleConnected: false,
     appleConnected: false,
     editingEventId: null,
@@ -1576,6 +1577,12 @@ function init() {
     if (state.events.length === 0) {
         addSampleData();
     }
+    
+    // Add balanced time off plan for the year
+    addBalancedTimeOffPlan();
+    
+    // Add balanced time off plan for the year
+    addBalancedTimeOffPlan();
 }
 
 function addSampleData() {
@@ -1654,6 +1661,233 @@ function addSampleData() {
     saveToLocalStorage();
     updateAllViews();
     renderGoals();
+}
+
+/* ============================================
+   Balanced Time Off Plan
+   ============================================ */
+
+function addBalancedTimeOffPlan() {
+    const year = state.currentYear;
+    
+    // Add US Public Holidays
+    addUSPublicHolidays(year);
+    
+    // Add last 2 weeks of December
+    addYearEndHolidays(year);
+    
+    // Add 2 refresh days per quarter (8 total)
+    addQuarterlyRefreshDays(year);
+    
+    // Add 3 doctor visits throughout the year
+    addDoctorVisits(year);
+    
+    // Add 25 vacation days (time off)
+    addVacationDays(year);
+    
+    // Invalidate cache and update views
+    invalidateEventCache();
+    saveToLocalStorage();
+    updateAllViews();
+}
+
+function addUSPublicHolidays(year) {
+    const holidays = [
+        { name: "New Year's Day", month: 0, day: 1 },
+        { name: "Martin Luther King Jr. Day", month: 0, day: getMLKDay(year) },
+        { name: "Presidents' Day", month: 1, day: getPresidentsDay(year) },
+        { name: "Memorial Day", month: 4, day: getMemorialDay(year) },
+        { name: "Independence Day", month: 6, day: 4 },
+        { name: "Labor Day", month: 8, day: getLaborDay(year) },
+        { name: "Columbus Day", month: 9, day: getColumbusDay(year) },
+        { name: "Veterans Day", month: 10, day: 11 },
+        { name: "Thanksgiving", month: 10, day: getThanksgiving(year) },
+        { name: "Christmas", month: 11, day: 25 }
+    ];
+    
+    holidays.forEach(holiday => {
+        const dateStr = `${year}-${String(holiday.month + 1).padStart(2, '0')}-${String(holiday.day).padStart(2, '0')}`;
+        
+        // Check if holiday already exists
+        if (!state.events.some(e => e.startDate === dateStr && e.title === holiday.name)) {
+            state.events.push({
+                id: generateId(),
+                title: holiday.name,
+                startDate: dateStr,
+                endDate: null,
+                category: 'refresh-days', // Using refresh-days for holidays
+                notes: 'US Public Holiday',
+                syncGoogle: false,
+                syncApple: false
+            });
+        }
+    });
+}
+
+// Helper functions for calculating floating holidays
+function getMLKDay(year) {
+    // Third Monday of January
+    const jan1 = new Date(year, 0, 1);
+    const firstMonday = 1 + (8 - jan1.getDay()) % 7;
+    return firstMonday + 14; // Third Monday
+}
+
+function getPresidentsDay(year) {
+    // Third Monday of February
+    const feb1 = new Date(year, 1, 1);
+    const firstMonday = 1 + (8 - feb1.getDay()) % 7;
+    return firstMonday + 14; // Third Monday
+}
+
+function getMemorialDay(year) {
+    // Last Monday of May
+    const may31 = new Date(year, 4, 31);
+    const lastMonday = 31 - ((may31.getDay() + 1) % 7);
+    return lastMonday;
+}
+
+function getLaborDay(year) {
+    // First Monday of September
+    const sep1 = new Date(year, 8, 1);
+    const firstMonday = 1 + (8 - sep1.getDay()) % 7;
+    return firstMonday;
+}
+
+function getColumbusDay(year) {
+    // Second Monday of October
+    const oct1 = new Date(year, 9, 1);
+    const firstMonday = 1 + (8 - oct1.getDay()) % 7;
+    return firstMonday + 7; // Second Monday
+}
+
+function getThanksgiving(year) {
+    // Fourth Thursday of November
+    const nov1 = new Date(year, 10, 1);
+    const firstThursday = 1 + (11 - nov1.getDay()) % 7;
+    return firstThursday + 21; // Fourth Thursday
+}
+
+function addYearEndHolidays(year) {
+    // Last 2 weeks of December (Dec 18-31)
+    for (let day = 18; day <= 31; day++) {
+        const dateStr = `${year}-12-${String(day).padStart(2, '0')}`;
+        
+        if (!state.events.some(e => e.startDate === dateStr && e.title === 'Year End Holiday')) {
+            state.events.push({
+                id: generateId(),
+                title: 'Year End Holiday',
+                startDate: dateStr,
+                endDate: null,
+                category: 'refresh-days',
+                notes: 'Year end time off',
+                syncGoogle: false,
+                syncApple: false
+            });
+        }
+    }
+}
+
+function addQuarterlyRefreshDays(year) {
+    // 2 refresh days per quarter (8 total)
+    const quarters = [
+        { month: 2, days: [15, 28] },  // Q1: March
+        { month: 5, days: [10, 25] },  // Q2: June
+        { month: 8, days: [12, 27] },  // Q3: September
+        { month: 11, days: [5, 20] }   // Q4: December (before year end holidays)
+    ];
+    
+    quarters.forEach(quarter => {
+        quarter.days.forEach(day => {
+            const dateStr = `${year}-${String(quarter.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            
+            // Skip if it's in the year end holiday period
+            if (quarter.month === 11 && day >= 18) return;
+            
+            if (!state.events.some(e => e.startDate === dateStr && e.title === 'Refresh Day')) {
+                state.events.push({
+                    id: generateId(),
+                    title: 'Refresh Day',
+                    startDate: dateStr,
+                    endDate: null,
+                    category: 'refresh-days',
+                    notes: 'Quarterly refresh day',
+                    syncGoogle: false,
+                    syncApple: false
+                });
+            }
+        });
+    });
+}
+
+function addDoctorVisits(year) {
+    // 3 doctor visits throughout the year (spread out)
+    const visits = [
+        { month: 2, day: 8 },   // March
+        { month: 6, day: 15 },  // July
+        { month: 10, day: 22 }  // November
+    ];
+    
+    visits.forEach(visit => {
+        const dateStr = `${year}-${String(visit.month + 1).padStart(2, '0')}-${String(visit.day).padStart(2, '0')}`;
+        
+        if (!state.events.some(e => e.startDate === dateStr && e.title === 'Doctor Visit')) {
+            state.events.push({
+                id: generateId(),
+                title: 'Doctor Visit',
+                startDate: dateStr,
+                endDate: null,
+                category: 'doctor-visits',
+                notes: 'Annual checkup',
+                syncGoogle: false,
+                syncApple: false
+            });
+        }
+    });
+}
+
+function addVacationDays(year) {
+    // 25 vacation days spread throughout the year
+    // Avoiding holidays and year-end period
+    const vacationPeriods = [
+        { start: { month: 1, day: 20 }, end: { month: 1, day: 24 } },  // 5 days in February
+        { start: { month: 3, day: 1 }, end: { month: 3, day: 5 } },   // 5 days in April
+        { start: { month: 5, day: 15 }, end: { month: 5, day: 19 } }, // 5 days in June
+        { start: { month: 7, day: 1 }, end: { month: 7, day: 5 } },  // 5 days in August
+        { start: { month: 9, day: 10 }, end: { month: 9, day: 14 } }  // 5 days in October
+    ];
+    
+    vacationPeriods.forEach(period => {
+        const startDate = new Date(year, period.start.month, period.start.day);
+        const endDate = new Date(year, period.end.month, period.end.day);
+        
+        const current = new Date(startDate);
+        while (current <= endDate) {
+            const dateStr = `${year}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+            
+            // Skip if it's a weekend
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                // Check if it's not already a holiday or year-end period
+                const isHoliday = state.events.some(e => e.startDate === dateStr && 
+                    (e.category === 'refresh-days' || e.title.includes('Holiday')));
+                
+                if (!isHoliday && !state.events.some(e => e.startDate === dateStr && e.title === 'Vacation Day')) {
+                    state.events.push({
+                        id: generateId(),
+                        title: 'Vacation Day',
+                        startDate: dateStr,
+                        endDate: null,
+                        category: 'family-trips', // Using family-trips for vacation
+                        notes: 'Time off',
+                        syncGoogle: false,
+                        syncApple: false
+                    });
+                }
+            }
+            
+            current.setDate(current.getDate() + 1);
+        }
+    });
 }
 
 // Start the app when DOM is ready
